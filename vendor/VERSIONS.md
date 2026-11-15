@@ -6,5 +6,6 @@
 | ScrollTrigger.min.js | GSAP ScrollTrigger | 3.15.1 | npm `gsap` dist/ | 同上 |
 | echarts.min.js | Apache ECharts | 5.6.0 | npm `echarts` dist/ | Apache-2.0 |
 | scrollama.min.js | scrollama | 3.2.0 | npm `scrollama` build/ | MIT |
+| qrcode-generator.js | qrcode-generator（Kazuhiko Arase） | 1.5.2 | npm `qrcode-generator` qrcode.js（v1.1 新增，原样未改） | MIT |
 
-下载方式：`npm pack gsap@3 echarts@5 scrollama@3` 后解包复制（2026-11-15）。
+下载方式：`npm pack gsap@3 echarts@5 scrollama@3 qrcode-generator@1` 后解包复制（2026-11-15）。

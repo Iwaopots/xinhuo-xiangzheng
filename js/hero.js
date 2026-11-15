@@ -28,6 +28,29 @@ const STOPS = [
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 /**
+ * v1.1 主视觉插槽：index.html 里 #heroVisual 的 data-src 填了图片路径（如 assets/hero.jpg）才显示。
+ * 不自动去猜文件名 —— 猜不到的文件会产生 404 和控制台报错。
+ * 图片加载失败时整块移除，不留裂图。
+ */
+function initHeroVisual() {
+  const box = document.getElementById('heroVisual');
+  const src = box && box.dataset.src && box.dataset.src.trim();
+  if (!src) {
+    if (box) box.remove();
+    return;
+  }
+  const img = new Image();
+  img.alt = '';
+  img.decoding = 'async';
+  img.onload = () => {
+    box.append(img);
+    box.classList.add('is-loaded');
+  };
+  img.onerror = () => box.remove();
+  img.src = src;
+}
+
+/**
  * 初始化首页动画
  * @param {{ reducedMotion: boolean }} options
  */
@@ -36,6 +59,8 @@ export function initHero({ reducedMotion }) {
   const head = document.getElementById('marchHead');
   const labelLayer = document.getElementById('marchLabels');
   if (!path || !head || !labelLayer) return;
+
+  initHeroVisual();
 
   const total = path.getTotalLength(); // 路径总长度（SVG 坐标单位）
 
@@ -109,8 +134,8 @@ export function initHero({ reducedMotion }) {
     },
   });
 
-  // 标题与副标题：开场淡入
-  gsap.from('.hero-copy > *', { y: 24, opacity: 0, duration: 1, stagger: 0.15, ease: 'power3.out' });
+  // 标题与副标题：开场淡入（v1.1：起始不透明度 0.6、位移 8px、0.4 秒 —— 快速滚动或截图时文字也清楚）
+  gsap.from('.hero-copy > *', { y: 8, opacity: 0.6, duration: 0.4, stagger: 0.06, ease: 'power2.out' });
 
   // 滚动提示：开始滚动后淡出
   gsap.to('.scroll-hint', {

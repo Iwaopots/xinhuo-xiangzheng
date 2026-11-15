@@ -9,6 +9,7 @@
  */
 
 import { createLocalStore } from './relay-store.js';
+import { chapters } from './data/nodes.js';
 
 // 想换成云端：import { createSupabaseStore } from './relay-store.js'; const store = createSupabaseStore(URL, KEY);
 const store = createLocalStore();
@@ -71,6 +72,11 @@ function fmtDate(iso) {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
 }
 const pad4 = (n) => String(n).padStart(4, '0');
+
+/** 海报底部时间线的站点（v1.1）：取地图上参与行军线的各站，短名=地图标签前两字，年份=date 里的“XXXX年” */
+const TIMELINE = chapters
+  .filter((ch) => ch.inRoute)
+  .map((ch) => ({ name: [...ch.mapLabel].slice(0, 2).join(''), year: (String(ch.date).match(/(\d{4})年/) || [, ''])[1] }));
 
 /**
  * 在 canvas 上画接力海报（1080 × 1440）
@@ -182,40 +188,42 @@ function drawPoster(canvas, e) {
   ctx.fillStyle = C.ink;
   lines.forEach((l, i) => ctx.fillText(l, W / 2, startY + i * lh));
 
-  // 9) 装饰行军线：自右向左蜿蜒，沿途四个节点，终点是“我”
-  const pts = [[930, 1185], [780, 1232], [620, 1170], [460, 1234], [300, 1178], [170, 1212]];
-  ctx.strokeStyle = 'rgba(31,26,23,.22)';
-  ctx.setLineDash([3, 12]);
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(1000, 1176);
-  ctx.lineTo(930, 1185);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // 9) v1.1 时间线：按时间顺序从左到右 —— 汝城 1934 → 湘江 1934 → 通道 1934 → 桑植 1935 → 我 今天
+  //    站名与年份从 nodes.js 读取（年份取 date 字段里的“XXXX年”），改配置即可同步。
+  //    1934—1935 的路段用红色实线；从桑植到“我”跨越近一个世纪，用金色虚线表示“薪火相传”。
+  const stops = [...TIMELINE, { name: '我', year: '今天', me: true }];
+  const x0 = 170, x1 = W - 170, ty = 1212;
+  const xs = stops.map((_, i) => x0 + ((x1 - x0) * i) / (stops.length - 1));
+  ctx.lineCap = 'round';
   ctx.strokeStyle = C.red;
   ctx.lineWidth = 6;
-  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(...pts[0]);
-  for (let i = 1; i < pts.length; i++) {
-    const [x0, y0] = pts[i - 1];
-    const [x1, y1] = pts[i];
-    ctx.bezierCurveTo((x0 + x1) / 2, y0, (x0 + x1) / 2, y1, x1, y1);
-  }
+  ctx.moveTo(xs[0], ty);
+  ctx.lineTo(xs[stops.length - 2], ty);
   ctx.stroke();
-  const labels = ['汝城', '湘江', '通道', '桑植', '1936', '我'];
-  ctx.font = `700 26px ${SERIF}`;
-  pts.forEach(([px, py], i) => {
-    const last = i === pts.length - 1;
+  ctx.strokeStyle = C.gold;
+  ctx.lineWidth = 5;
+  ctx.setLineDash([4, 14]);
+  ctx.beginPath();
+  ctx.moveTo(xs[stops.length - 2] + 16, ty);
+  ctx.lineTo(xs[stops.length - 1] - 20, ty);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  stops.forEach((st, i) => {
+    const px = xs[i];
     ctx.beginPath();
-    ctx.arc(px, py, last ? 14 : 9, 0, Math.PI * 2);
-    ctx.fillStyle = last ? C.red : C.paper;
+    ctx.arc(px, ty, st.me ? 16 : 11, 0, Math.PI * 2);
+    ctx.fillStyle = st.me ? C.red : C.paper;
     ctx.fill();
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5;
     ctx.strokeStyle = C.red;
     ctx.stroke();
-    ctx.fillStyle = last ? C.red : C.ink;
-    ctx.fillText(labels[i], px, py + (i % 2 ? 46 : -22));
+    ctx.fillStyle = st.me ? C.red : C.ink;
+    ctx.font = `900 36px ${SERIF}`;
+    ctx.fillText(st.name, px, ty - 30);
+    ctx.fillStyle = st.me ? C.red : C.inkSoft;
+    ctx.font = `700 26px ${SERIF}`;
+    ctx.fillText(st.year, px, ty + 52);
   });
 
   // 10) 页脚：日期 + 口号 + 印章
@@ -276,7 +284,7 @@ function animateCount(node, from, to, reducedMotion) {
     return;
   }
   const t0 = performance.now();
-  const dur = Math.min(1600, 400 + Math.abs(to - from) * 120);
+  const dur = Math.min(600, 250 + Math.abs(to - from) * 60);
   const step = (t) => {
     if (token !== countToken) return; // 已被更新的动画取代
     const p = Math.min(1, (t - t0) / dur);
@@ -285,6 +293,32 @@ function animateCount(node, from, to, reducedMotion) {
     if (p < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
+}
+
+/* ---------------- 二维码（v1.1，现场答辩扫码接力） ---------------- */
+
+/** 线上地址：GitHub Pages。二维码由 vendor/qrcode-generator.js 在本地生成，无需联网 */
+export const RELAY_URL = 'https://iwaopots.github.io/xinhuo-xiangzheng/#relay';
+
+/**
+ * 把页面上所有 [data-qr] 容器画成二维码（SVG，墨色方块 + 纸色底）
+ * 用 SVG 而不是图片：任意缩放都清晰，投影到大屏也能扫。
+ */
+function renderQR() {
+  const make = window.qrcode;
+  const boxes = document.querySelectorAll('[data-qr]');
+  if (!make || !boxes.length) return;
+  const qr = make(0, 'M'); // 0 = 自动选择版本；M = 15% 纠错
+  qr.addData(RELAY_URL);
+  qr.make();
+  const n = qr.getModuleCount();
+  const q = 2; // 留白（模块数）
+  let d = '';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) if (qr.isDark(r, c)) d += `M${c + q},${r + q}h1v1h-1z`;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + q * 2} ${n + q * 2}" shape-rendering="crispEdges" role="img" aria-label="二维码：${RELAY_URL}"><rect width="100%" height="100%" fill="${C.paper}"/><path d="${d}" fill="${C.ink}"/></svg>`;
+  boxes.forEach((b) => { b.innerHTML = svg; }); // svg 由我们自己生成（固定网址），不含用户输入
 }
 
 /* ---------------- 对外入口 ---------------- */
@@ -314,10 +348,10 @@ export async function initRelay({ reducedMotion }) {
   function renderWall(newNo) {
     wall.replaceChildren(...[...entries].reverse().slice(0, 60).map((e) => card(e, e.no === newNo)));
     clearBtn.hidden = !entries.some((e) => e.sample);
-    if (counted) {
-      animateCount(countEl, shown, entries.length, reducedMotion);
-      shown = entries.length;
-    }
+    // v1.1：计数器直接显示真实值（从不显示 0 再数上去，避免被误读成“故障”）；
+    //       只有数量变化（新接力/清除示例）时才从旧值滚动到新值
+    animateCount(countEl, shown, entries.length, reducedMotion);
+    shown = entries.length;
   }
 
   /** 实时预览：边输入边更新海报（还没提交时用占位文字） */
@@ -401,18 +435,20 @@ export async function initRelay({ reducedMotion }) {
     preview();
   });
 
-  // 计数器：滚动到接力墙时才开始“数数”
+  // 计数器入场：数值早已是终值，这里只做一次轻微的“盖章”强调动画（CSS .is-pop）
   const io = new IntersectionObserver((list) => {
     if (list.some((x) => x.isIntersecting) && !counted) {
       counted = true;
-      animateCount(countEl, 0, entries.length, reducedMotion);
-      shown = entries.length;
+      if (!reducedMotion) countEl.classList.add('is-pop');
       io.disconnect();
     }
   }, { threshold: 0.4 });
   io.observe(countEl);
 
   entries = await store.list();
+  shown = entries.length;
+  countEl.textContent = String(entries.length); // 先直接写入终值
   renderWall();
   preview();
+  renderQR();
 }

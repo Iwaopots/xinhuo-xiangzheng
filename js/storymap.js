@@ -150,17 +150,68 @@ function registerBaseMap(hunanGeo, neighborsGeo) {
   };
   echarts.registerMap(MAP_NAME, merged);
 
-  // 周边省份：浅色、虚一点，只作为“地理语境”
-  const neighborRegions = neighborsGeo.features.map((f) => ({
-    name: f.properties.name,
+  return neighborsGeo.features.map((f) => f.properties.name);
+}
+
+/**
+ * v1.1：周边省份的样式。省名只在“全省概览”（缩放较小）时以小号浅色显示，
+ * 放大到某一站时隐藏 —— 否则“广西壮族自治区”等长名字会被地图边缘切掉一半。
+ * @param {string[]} names    周边省份名称
+ * @param {boolean}  showName 是否显示省名
+ */
+function neighborRegions(names, showName) {
+  return names.map((name) => ({
+    name,
     itemStyle: { areaColor: 'rgba(244,237,225,0.6)', borderColor: C.neighborLine, borderWidth: 0.8 },
-    label: { show: true, color: '#A59882', fontSize: 13, fontFamily: 'serif', fontWeight: 'bold' },
+    label: { show: showName, color: 'rgba(90,78,69,0.45)', fontSize: 11, fontFamily: 'serif', fontWeight: 'normal' },
   }));
-  return neighborRegions;
+}
+
+/* -------------------------------------------------------------
+ * v1.1：站点标签的“防裁切”布局
+ * ECharts 的 labelLayout 回调在每次重绘时调用，拿到圆点(rect)和标签(labelRect)的像素位置，
+ * 我们据此决定标签放在点的 右 / 左 / 下 / 上，并保证整块标签留在地图框内：
+ *   · 默认放右侧，与圆点留出间距（当前站有水波纹，间距更大，不压住涟漪）；
+ *   · 右侧放不下 → 放左侧；顶部被“地图标题/自动播放”按钮挡住 → 放下方；贴近底边 → 放上方；
+ *   · 最后再把坐标夹在安全边距内（SAFE）。
+ * ------------------------------------------------------------- */
+const SAFE = { top: 52, right: 10, bottom: 28, left: 10 }; // 上：给地图标题和播放按钮留位置；下：给“仅为示意”小字留位置
+
+function makeLabelLayout(chart, getCurrentIdx) {
+  return (params) => {
+    const W = chart.getWidth();
+    const H = chart.getHeight();
+    const { rect, labelRect } = params;
+    const gap = params.dataIndex === getCurrentIdx() ? 18 : 8; // 当前站：水波纹更大，标签离远一点
+    const w = labelRect.width;
+    const h = labelRect.height;
+    const cx = rect.x + rect.width / 2;
+    const cy = rect.y + rect.height / 2;
+    const r = rect.width / 2;
+
+    // 圆点本身已在地图框外（例如放大到通道时，瑞金和汝城在画面外）→ 标签也移出画面，
+    // 不把它“硬塞”回框内，否则标签会离开它的点、误导读者
+    if (cx < 0 || cx > W || cy < 0 || cy > H) return { x: -9999, y: -9999 };
+
+    // 候选位置（标签左上角坐标），按优先级排列
+    const candidates = [
+      { x: cx + r + gap, y: cy - h / 2 },          // 右
+      { x: cx - r - gap - w, y: cy - h / 2 },      // 左
+      { x: cx - w / 2, y: cy + r + gap - 2 },      // 下
+      { x: cx - w / 2, y: cy - r - gap - h + 2 },  // 上
+    ];
+    const fits = (c) =>
+      c.x >= SAFE.left && c.x + w <= W - SAFE.right && c.y >= SAFE.top && c.y + h <= H - SAFE.bottom;
+    let best = candidates.find(fits) || candidates[0];
+    // 都放不下（点本身在边缘外）时，夹在安全区内，至少文字完整可读
+    const x = Math.min(Math.max(best.x, SAFE.left), W - SAFE.right - w);
+    const y = Math.min(Math.max(best.y, SAFE.top), H - SAFE.bottom - h);
+    return { x, y, align: 'left', verticalAlign: 'top', hideOverlap: false };
+  };
 }
 
 /** 生成地图的完整初始配置 */
-function baseOption(neighborRegions, reducedMotion) {
+function baseOption(neighborNames, reducedMotion) {
   return {
     animation: !reducedMotion,
     geo: {
@@ -176,7 +227,7 @@ function baseOption(neighborRegions, reducedMotion) {
         borderWidth: 0.6,
       },
       label: { show: true, color: C.inkSoft, fontSize: 11 },
-      regions: neighborRegions,
+      regions: neighborRegions(neighborNames, true),
     },
     series: [
       {
@@ -223,6 +274,7 @@ function baseOption(neighborRegions, reducedMotion) {
         coordinateSystem: 'geo',
         zlevel: 3,
         symbolSize: 10,
+        // v1.1：标签做成“偏移小签”——纸色底 + 细边框，位置由 labelLayout 计算（见 makeLabelLayout）
         label: {
           show: true,
           formatter: '{b}', // 显示地点名（默认会显示坐标数值）
@@ -231,9 +283,13 @@ function baseOption(neighborRegions, reducedMotion) {
           fontFamily: 'serif',
           fontWeight: 'bold',
           fontSize: 14,
+          lineHeight: 18,
           color: C.ink,
-          backgroundColor: 'rgba(244,237,225,0.85)',
-          padding: [2, 5],
+          backgroundColor: 'rgba(244,237,225,0.94)',
+          borderColor: 'rgba(31,26,23,0.35)',
+          borderWidth: 0.6,
+          borderRadius: 2,
+          padding: [3, 6],
         },
         data: [],
       },
@@ -303,9 +359,11 @@ export function initStorymap({ hunanGeo, neighborsGeo, reducedMotion }) {
   renderSteps(stepsEl);
 
   // ---- 1. 地图初始化 ----
-  const neighborRegions = registerBaseMap(hunanGeo, neighborsGeo);
+  const neighborNames = registerBaseMap(hunanGeo, neighborsGeo);
   const chart = echarts.init(mapEl, null, { renderer: 'canvas' });
-  chart.setOption(baseOption(neighborRegions, reducedMotion));
+  chart.setOption(baseOption(neighborNames, reducedMotion));
+  let currentIdx = -1; // 当前站在 nodes 散点数据里的下标（0=瑞金，1起=各站；labelLayout 用来加大间距）
+  chart.setOption({ series: [{ id: 'nodes', labelLayout: makeLabelLayout(chart, () => currentIdx) }] });
 
   // 当前视角（GSAP 对这个普通对象做补间，每一帧同步给 ECharts，实现平滑“飞行”）
   const view = { lng: chapters[0].view.center[0], lat: chapters[0].view.center[1], zoom: chapters[0].view.zoom };
@@ -347,7 +405,11 @@ export function initStorymap({ hunanGeo, neighborsGeo, reducedMotion }) {
 
     // 地图路线
     const state = routeStateAt(index);
+    currentIdx = chapter.id === 'prologue' ? 0 : chapter.coord ? routeNodes.indexOf(chapter) + 1 : -1;
+    const target = chapter.id === 'prologue' ? { center: [113.3, 26.9], zoom: 1.75 } : chapter.view;
     chart.setOption({
+      // 周边省名只在缩放较小（概览）时显示
+      geo: { regions: neighborRegions(neighborNames, target.zoom <= 2) },
       series: [
         { id: 'route-done', data: state.done },
         { id: 'route-active', data: state.active },
@@ -359,7 +421,7 @@ export function initStorymap({ hunanGeo, neighborsGeo, reducedMotion }) {
     });
 
     // 序章视角放宽一些，让江西瑞金也在画面里
-    flyTo(chapter.id === 'prologue' ? { center: [113.3, 26.9], zoom: 1.75 } : chapter.view);
+    flyTo(target);
   }
 
   // ---- 2. 岔路口互动（通道转兵） ----

@@ -15,7 +15,8 @@ import { buildIndex, search, answer } from './qa-engine.js';
 
 const LS_KEY = 'xhxz.llm.v1';     // localStorage 键名：大模型设置
 const MAX_Q = 60;                 // 问题最长字数
-const PRESETS = ['“半条被子”是什么故事？', '什么是通道转兵？', '长征精神对今天的大学生有什么意义？'];
+// 示例问法（左栏“点一下，直接发报”）：都取自 kb.json 里已有的问题，保证本地模式一定答得上
+const PRESETS = ['“半条被子”是什么故事？', '陈树湘是谁？', '什么是通道转兵？', '长征精神对今天的大学生有什么意义？'];
 
 /** 小红的系统提示词：限定只依据资料回答（防止模型“编历史”） */
 const SYSTEM_PROMPT =
@@ -104,7 +105,7 @@ export async function initQA({ reducedMotion }) {
   const sendBtn = $('#qaSend', root);
   const chips = $('#qaChips', root);
   const modeBadge = $('#qaMode', root);
-  const dialog = $('#qaSettings', root);
+  const dialog = $('#qaSettings', root); // <details> 折叠面板
 
   let index = null;
   let serial = 0;   // 电报流水号
@@ -197,6 +198,13 @@ export async function initQA({ reducedMotion }) {
     sendBtn.disabled = true;
     input.value = '';
 
+    // v1.1 手机端：左栏在上、电报单在下，点了示例问题后把电报单滚进视野，否则看不到回答
+    const tg = root.querySelector('.telegraph');
+    if (tg && window.matchMedia('(max-width: 860px)').matches) {
+      const r = tg.getBoundingClientRect();
+      if (r.top > window.innerHeight * 0.5 || r.bottom < 0) tg.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+    }
+
     slip('out').body.append(el('p', 'slip-text', q));
     const { body } = slip('in');
     const waiting = el('p', 'slip-wait', '滴滴——滴——  正在收报');
@@ -271,7 +279,7 @@ export async function initQA({ reducedMotion }) {
     );
   })();
 
-  // ---- 5. 设置面板（大模型模式） ----
+  // ---- 5. 设置面板（大模型模式）：v1.1 由弹窗改为左栏的 <details> 折叠面板 ----
   const f = {
     enabled: $('#llmEnabled', dialog),
     base: $('#llmBase', dialog),
@@ -279,16 +287,17 @@ export async function initQA({ reducedMotion }) {
     model: $('#llmModel', dialog),
     tip: $('#llmTip', dialog),
   };
-  $('#qaSettingsBtn', root).addEventListener('click', () => {
+  // 展开面板时，把已保存的设置填回表单
+  dialog.addEventListener('toggle', () => {
+    if (!dialog.open) return;
     const cfg = loadCfg();
     f.enabled.checked = cfg.enabled;
     f.base.value = cfg.base;
     f.key.value = cfg.key;
     f.model.value = cfg.model;
     f.tip.textContent = '';
-    dialog.showModal();
   });
-  $('#llmCancel', dialog).addEventListener('click', () => dialog.close());
+  $('#llmCancel', dialog).addEventListener('click', () => { dialog.open = false; });
   $('#llmClear', dialog).addEventListener('click', () => {
     localStorage.removeItem(LS_KEY);
     f.enabled.checked = false;
@@ -311,6 +320,6 @@ export async function initQA({ reducedMotion }) {
     }
     saveCfg(cfg);
     refreshMode();
-    dialog.close();
+    dialog.open = false;
   });
 }

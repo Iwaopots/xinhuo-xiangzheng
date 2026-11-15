@@ -4,8 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>薪火·湘征 —— 长征湖南段交互数字展</title>
-  <meta name="description" content="码承长征薪火，页绘青春征途。纪念中国工农红军长征胜利90周年，长征湖南段交互数字展。" />
+  <meta name="description" content="码承长征薪火，页绘青春征途。纪念中国工农红军长征胜利90周年，长征湖南段交互数字展：滚动地图走过汝城、湘江、通道、桑植，问AI讲解员小红，写下你的青春接力。" />
   <meta name="theme-color" content="#F4EDE1" />
+  <!-- v1.1：分享卡片（Open Graph）。og:image 必须是完整网址，指向 GitHub Pages 上的 assets/og.png（1200×630） -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="薪火·湘征" />
+  <meta property="og:title" content="《薪火·湘征》—— 长征湖南段交互数字展" />
+  <meta property="og:description" content="码承长征薪火，页绘青春征途 · 纪念中国工农红军长征胜利90周年（1936—2026）" />
+  <meta property="og:url" content="https://iwaopots.github.io/xinhuo-xiangzheng/" />
+  <meta property="og:image" content="https://iwaopots.github.io/xinhuo-xiangzheng/assets/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="《薪火·湘征》长征湖南段交互数字展" />
+  <meta property="og:locale" content="zh_CN" />
+  <meta name="twitter:card" content="summary_large_image" />
   <!-- 内联 SVG 图标（红色印章“湘”），无需额外文件，也避免 favicon 404 -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23B3261E'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='%23F4EDE1' font-family='serif' font-weight='bold'%3E%E6%B9%98%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="css/style.css" />
@@ -33,6 +45,9 @@
     <!-- hero 比一屏更高，内部 .hero-stage 吸顶；滚动这段距离时红色行军线逐渐画出 -->
     <section class="hero" id="hero" aria-labelledby="hero-title">
       <div class="hero-stage">
+        <!-- ▼ v1.1 主视觉插槽：把图片放进 assets/（如 assets/hero.jpg），再把文件路径填进下面的 data-src；
+             留空则不显示（不发任何请求，也就不会有 404）。图片会被处理成淡淡的旧报纸色调，压在标题后面。 -->
+        <div class="hero-visual" id="heroVisual" data-src="" aria-hidden="true"></div>
         <!-- 报纸刊头信息条 -->
         <div class="masthead-line">
           <span>一九三四 — 二〇二六</span>
@@ -89,7 +104,7 @@
             <!-- v1：自动播放（现场演示用），逻辑见 js/autoplay.js -->
             <div class="autoplay">
               <button type="button" class="autoplay-btn" id="autoplayBtn" aria-pressed="false">▶ 自动播放</button>
-              <span class="autoplay-hint" id="autoplayHint" hidden>空格 暂停/继续 · ←/→ 切换</span>
+              <span class="autoplay-hint" id="autoplayHint" hidden><kbd>空格</kbd> 暂停/继续 · <kbd>←</kbd><kbd>→</kbd> 切换</span>
             </div>
           </div>
         </div>
@@ -116,10 +131,39 @@
               <p class="qa-mode" id="qaMode">本地知识库模式 · 离线可用</p>
             </div>
           </div>
-          <p class="qa-desc">小红熟悉汝城沙洲、湘江战役、通道转兵、桑植出发和长征精神。默认从本地知识库检索作答，无需联网。</p>
-          <p class="qa-label">试试这样问：</p>
-          <div class="chips" id="qaChips"></div>
-          <button type="button" class="qa-settings-btn" id="qaSettingsBtn">⚙ 大模型设置（可选）</button>
+          <p class="qa-desc">默认从本地知识库检索作答，无需联网；每条回答都标出来自哪一类资料和匹配度。</p>
+
+          <!-- v1.1：左栏补“小红能答什么”+ 示例问法，与右侧电报单高度平衡 -->
+          <div class="qa-scope">
+            <p class="qa-label">小红能答什么</p>
+            <ul class="qa-topics">
+              <li><b>汝城沙洲</b>“半条被子”的故事与沙洲村</li>
+              <li><b>湘江战役</b>湘桂交界的血战与红34师</li>
+              <li><b>通道转兵</b>岔路口的抉择与黎平会议</li>
+              <li><b>桑植出发</b>红二、六军团与贺龙、任弼时</li>
+              <li><b>长征精神</b>对今天大学生的意义、“新长征”</li>
+            </ul>
+          </div>
+          <p class="qa-label">点一下，直接发报：</p>
+          <div class="chips chips-col" id="qaChips"></div>
+
+          <!-- 大模型设置收进折叠面板：密钥只保存在本机 localStorage -->
+          <details class="qa-settings" id="qaSettings">
+            <summary>⚙ 大模型设置（可选）</summary>
+            <form id="llmForm" autocomplete="off">
+              <p class="dialog-note">填写任意兼容 OpenAI 接口的服务。小红会先在本地知识库检索最相关的 3 条资料，只让模型依据这些资料作答。接口地址、密钥只保存在本浏览器的 localStorage，不会上传到本站；比赛现场建议使用默认的本地模式。</p>
+              <label class="switch"><input type="checkbox" id="llmEnabled" /> 启用大模型模式</label>
+              <label>接口地址（Base URL）<input id="llmBase" type="url" placeholder="https://api.example.com/v1" /></label>
+              <label>密钥（API Key）<input id="llmKey" type="password" placeholder="sk-..." autocomplete="off" /></label>
+              <label>模型名<input id="llmModel" type="text" placeholder="例如 deepseek-chat" /></label>
+              <p class="dialog-tip" id="llmTip" aria-live="polite"></p>
+              <div class="dialog-actions">
+                <button type="button" id="llmClear" class="btn-ghost">清除设置</button>
+                <button type="button" id="llmCancel" class="btn-ghost">收起</button>
+                <button type="submit" class="btn-red">保存</button>
+              </div>
+            </form>
+          </details>
         </aside>
 
         <!-- 电报单样式的对话区 -->
@@ -137,23 +181,6 @@
         </div>
       </div>
 
-      <!-- 大模型设置：密钥只保存在本机 localStorage -->
-      <dialog class="qa-dialog" id="qaSettings" aria-labelledby="llmTitle">
-        <form id="llmForm" method="dialog">
-          <h3 id="llmTitle">大模型模式（可选）</h3>
-          <p class="dialog-note">填写任意兼容 OpenAI 接口的服务。小红会先在本地知识库检索最相关的 3 条资料，只让模型依据这些资料作答。<br />接口地址、密钥只保存在本浏览器的 localStorage，不会上传到本站；比赛现场建议使用默认的本地模式。</p>
-          <label class="switch"><input type="checkbox" id="llmEnabled" /> 启用大模型模式</label>
-          <label>接口地址（Base URL）<input id="llmBase" type="url" placeholder="https://api.example.com/v1" /></label>
-          <label>密钥（API Key）<input id="llmKey" type="password" placeholder="sk-..." autocomplete="off" /></label>
-          <label>模型名<input id="llmModel" type="text" placeholder="例如 deepseek-chat" /></label>
-          <p class="dialog-tip" id="llmTip" aria-live="polite"></p>
-          <div class="dialog-actions">
-            <button type="button" id="llmClear" class="btn-ghost">清除设置</button>
-            <button type="button" id="llmCancel" class="btn-ghost">取消</button>
-            <button type="submit" class="btn-red">保存</button>
-          </div>
-        </form>
-      </dialog>
     </section>
 
     <!-- ===================== 4. 青春接力（js/relay.js + js/relay-store.js） ===================== -->
@@ -187,6 +214,16 @@
           </div>
           <p class="relay-status" id="relayStatus" aria-live="polite"></p>
           <p class="relay-privacy">信息仅保存在你自己的浏览器中（localStorage），不会上传。</p>
+
+          <!-- v1.1：扫码在手机上打开（现场答辩演示用）。二维码由 vendor/qrcode-generator.js 本地生成，离线可用 -->
+          <div class="qr-card">
+            <div class="qr-box" data-qr></div>
+            <div>
+              <p class="qr-title">扫码在手机上打开 / 接力</p>
+              <p class="qr-url">iwaopots.github.io/xinhuo-xiangzheng</p>
+              <p class="qr-note">用手机相机扫一扫，直接来到“青春接力”。</p>
+            </div>
+          </div>
         </form>
 
         <div class="poster-frame">
@@ -195,7 +232,7 @@
       </div>
 
       <div class="wall-head">
-        <p class="wall-count">已有 <strong id="relayCount">0</strong> 位同学接力</p>
+        <p class="wall-count">已有 <strong id="relayCount">—</strong> 位同学接力</p>
         <button type="button" class="btn-link" id="relayClearSamples" hidden>清除示例数据</button>
       </div>
       <div class="relay-wall" id="relayWall" aria-live="polite"></div>
@@ -211,9 +248,13 @@
       <div class="about-grid">
         <article class="about-card about-team">
           <h3>参赛队伍</h3>
-          <p class="team-name">队名：<strong>「待定」</strong></p>
+          <p class="team-name">队名：<strong>「薪火相传队」</strong></p>
           <p>湖南工学院（衡阳）· 网页设计大赛参赛作品</p>
-          <p class="muted">成员与分工：待补充</p>
+          <ul class="team-list">
+            <li><b>邓文杰</b><span>选题策划、前端开发与交互实现</span></li>
+            <li><b>徐辉年</b><span>史料整理考证、视觉设计、文案与内容运营</span></li>
+          </ul>
+          <p class="muted">现场讲解与答辩：两人共同完成。</p>
         </article>
 
         <article class="about-card about-idea">
@@ -240,25 +281,72 @@
         <article class="about-card">
           <h3>史料来源</h3>
           <ul class="src-list">
-            <li>《中国共产党历史》第一卷（待登记具体章节）</li>
-            <li>中国共产党新闻网 · 长征专题（待登记链接）</li>
-            <li>汝城“半条被子的温暖”专题陈列馆资料（待登记）</li>
-            <li>通道转兵纪念馆资料（待登记）</li>
-            <li>红二方面军长征出发地纪念馆资料（待登记）</li>
-            <li>人民网 / 新华网相关报道（待登记）</li>
+            <li><a href="http://www.xinhuanet.com/politics/2016-10/21/c_1119765804.htm" target="_blank" rel="noopener">习近平：在纪念红军长征胜利80周年大会上的讲话</a> · 新华网，2016-10-21（“半条被子”与长征精神表述）</li>
+            <li><a href="https://www.dswxyjy.org.cn/n1/2026/0129/c427167-40655458.html" target="_blank" rel="noopener">湘江战役重要研究成果报告</a> · 中共中央党史和文献研究院，2026-01-29</li>
+            <li><a href="https://www.dswxyjy.org.cn/n1/2026/1009/c244516-40811392.html" target="_blank" rel="noopener">黎平会议：“伟大转折的起点”</a> · 中共中央党史和文献研究院（原载《学习时报》），2026-10-09</li>
+            <li><a href="http://cpc.people.com.cn/n1/2024/1208/c443712-40377631.html" target="_blank" rel="noopener">通道会议：伟大转折的起点</a> · 中国共产党新闻网，2024-12-08</li>
+            <li><a href="https://www.dswxyjy.org.cn/n/2013/0806/c222137-22463315.html" target="_blank" rel="noopener">通道会议和通道转兵纪念地（恭城书院）</a> · 中共中央党史和文献研究院·革命遗址</li>
+            <li><a href="http://paper.ce.cn/jjrb/html/2016-10/22/content_315083.htm" target="_blank" rel="noopener">罗开富与“半条被子”报道始末</a> · 《经济日报》数字报，2016-10-22</li>
+            <li><a href="https://www.dswxyjy.org.cn/n1/2026/1021/c244516-40818624.html" target="_blank" rel="noopener">甘孜会师，团结意义重大</a> · 中共中央党史和文献研究院（原载《光明日报》），2026-10-20</li>
+            <li><a href="http://dangshi.people.com.cn/n1/2019/0226/c85037-30902279.html" target="_blank" rel="noopener">红二、六军团突围长征：浴血关山战犹酣</a> · 人民网·党史频道，2019-02-26</li>
+            <li><a href="http://www.xinhuanet.com/mil/2016-08/10/c_129218795.htm" target="_blank" rel="noopener">湘江突围：长征中最为惨烈的战役（含陈树湘断肠明志）</a> · 新华网，2016-08-10</li>
+            <li><a href="http://wwj.hunan.gov.cn/wwj/c100310/c100350/202609/t20260928_34075043.html" target="_blank" rel="noopener">湖南四展入选纪念中国工农红军长征胜利90周年主题陈列展览推介名单</a> · 湖南省文物局，2026-09-30（三处纪念馆基本陈列）</li>
           </ul>
-          <p class="muted">所有日期、人数、引文正在逐条核对，未核实处已标注“待核”。地图数据：阿里云 DataV.GeoAtlas，仅为示意。</p>
+          <p class="muted">史料已逐条对照上述来源核对；有争议之处（如通道会议具体地点）在正文中注明。每个节点详情页底部另列有该站的全部史料出处。</p>
+          <details class="src-all">
+            <summary>查看全部 37 条史料来源（含交通、纪念馆资料）</summary>
+            <ol class="src-notes">
+              <li><a href="http://cpc.people.com.cn/n1/2024/1208/c443712-40377631.html" target="_blank" rel="noopener">通道会议：伟大转折的起点（中国共产党新闻网，2024-12-08）</a></li>
+              <li><a href="https://dnr.gxzf.gov.cn/lszt/xdsgdegdzygdjgcy/t16088785.shtml" target="_blank" rel="noopener">【红色档案故事】1934年11月红军途经湖南汝城时的行军部署（中央档案馆文，广西自然资源厅转载）</a></li>
+              <li><a href="https://www.qstheory.cn/books/2019-07/31/c_1119448591_12.htm" target="_blank" rel="noopener">《毛泽东选集》第一卷·论反对日本帝国主义的策略（求是网）</a></li>
+              <li><a href="https://www.hunan.gov.cn/hnszf/c101482/202108/t20210830_20409697.html" target="_blank" rel="noopener">汝城县“半条被子的温暖”专题陈列馆（湖南省政府网）</a></li>
+              <li><a href="http://www.xinhuanet.com/politics/2016-10/21/c_1119765804.htm" target="_blank" rel="noopener">习近平：在纪念红军长征胜利80周年大会上的讲话（新华网，2016-10-21）</a></li>
+              <li><a href="http://paper.ce.cn/jjrb/html/2016-10/22/content_315083.htm" target="_blank" rel="noopener">罗开富与“半条被子”（《经济日报》2016-10-22）</a></li>
+              <li><a href="https://hunan.gov.cn/topic/2020hnjksc/jkscwzewm/202012/t20201222_14054700.html" target="_blank" rel="noopener">沙洲红色旅游景区介绍（湖南省政府网·湖南简况）</a></li>
+              <li><a href="http://wwj.hunan.gov.cn/wwj/c100310/c100350/202609/t20260928_34075043.html" target="_blank" rel="noopener">湖南四展入选纪念长征胜利90周年主题陈列展览推介名单（湖南省文物局）</a></li>
+              <li><a href="https://cz.rednet.cn/content/2021/09/16/10150267.html" target="_blank" rel="noopener">全省首例进村定线旅游直通车“汝城文明沙洲至郴州”开通（红网）</a></li>
+              <li><a href="http://cpc.people.com.cn/n1/2016/1021/c64094-28798445.html" target="_blank" rel="noopener">习近平：在纪念红军长征胜利80周年大会上的讲话（中国共产党新闻网转载，2016-10-21）</a></li>
+              <li><a href="https://www.dswxyjy.org.cn/n1/2026/0129/c427167-40655458.html" target="_blank" rel="noopener">湘江战役重要研究成果报告（中央党史和文献研究院，2026-01-29）</a></li>
+              <li><a href="http://www.xinhuanet.com/mil/2016-08/10/c_129218795.htm" target="_blank" rel="noopener">湘江突围：长征中最为惨烈的战役（新华网，2016-08-10）</a></li>
+              <li><a href="http://cpc.people.com.cn/n1/2022/1108/c443712-32561457.html" target="_blank" rel="noopener">湘江战役34师幸存的3位开国将军（中国共产党新闻网，2022-11-08）</a></li>
+              <li><a href="https://www.12371.cn/2022/04/11/ARTI1649666126550508.shtml" target="_blank" rel="noopener">党史百问·湘江战役是一场什么样的战役？（共产党员网）</a></li>
+              <li><a href="https://www.hunan.gov.cn/hnszf/c101484/202108/t20210830_20409492.html" target="_blank" rel="noopener">道县陈树湘生平事迹陈列室（湖南省政府网）</a></li>
+              <li><a href="https://www.hunan.gov.cn/hnszf/hnyw/szdt/202104/t20210404_15907048.html" target="_blank" rel="noopener">【长沙市】断肠明志铸忠魂（湖南省政府网）</a></li>
+              <li><a href="https://news.gmw.cn/2026-11/07/content_39089796.htm" target="_blank" rel="noopener">广西：市市通高铁 产业更兴旺（光明日报，2026-11-07）</a></li>
+              <li><a href="https://www.dswxyjy.org.cn/n1/2026/1009/c244516-40811392.html" target="_blank" rel="noopener">黎平会议：“伟大转折的起点”（中央党史和文献研究院，2026-10-09）</a></li>
+              <li><a href="http://dangshi.people.com.cn/gb/n1/2016/0914/c85037-28716777.html" target="_blank" rel="noopener">解读长征（19）：黎平会议如何确定红军挺进黔北的战略（人民网党史）</a></li>
+              <li><a href="http://www.xinhuanet.com/2021-02/05/c_1127070089.htm" target="_blank" rel="noopener">向着胜利，关键的抉择——重走花界读懂“通道转兵”（新华网，2021-02-05）</a></li>
+              <li><a href="https://www.dswxyjy.org.cn/n/2013/0806/c222137-22463315.html" target="_blank" rel="noopener">通道会议和通道转兵纪念地（恭城书院）（中央党史和文献研究院）</a></li>
+              <li><a href="https://www.ccphistory.org.cn/shds/dsxx/content/ef0414f9-4f7f-4c1f-85ee-c5ddc43b8f79.html" target="_blank" rel="noopener">“万万火急”的通道转兵会议，究竟是在哪里召开的（上海党史网，2024-04-24）</a></li>
+              <li><a href="https://www.tongdao.gov.cn/tongdao/c132985/202112/7c15f40ced23431c994050967f43ebc2.shtml" target="_blank" rel="noopener">通道转兵纪念馆简介（通道县政府）</a></li>
+              <li><a href="https://zh.wikipedia.org/wiki/%E9%80%9A%E9%81%93%E7%AB%99" target="_blank" rel="noopener">通道站（维基百科，辅证车站位于县溪镇）</a></li>
+              <li><a href="https://www.huaihua.gov.cn/huaihua/c208770/202110/1f12cea62af74af196a98d01920933f0.shtml" target="_blank" rel="noopener">10月29日起通道将增开至长沙快速旅客列车（怀化市政府）</a></li>
+              <li><a href="http://dangshi.people.com.cn/n1/2019/0226/c85037-30902279.html" target="_blank" rel="noopener">红二、六军团突围长征：浴血关山战犹酣（人民网党史，2019-02-26）</a></li>
+              <li><a href="https://www.dswxyjy.org.cn/n1/2026/1021/c244516-40818624.html" target="_blank" rel="noopener">甘孜会师，团结意义重大（中央党史和文献研究院，2026-10-20）</a></li>
+              <li><a href="http://www.xinhuanet.com/politics/2021-02/03/c_1127059448.htm" target="_blank" rel="noopener">革命与玫瑰——国家非遗桑植民歌见证的“血色浪漫”（新华网）</a></li>
+              <li><a href="http://www.mod.gov.cn/gfbw/gfjy_index/js_214151/16418521.html" target="_blank" rel="noopener">红军长征中的会师（国防部网）</a></li>
+              <li><a href="http://dangshi.people.com.cn/n1/2016/0418/c85037-28284709.html" target="_blank" rel="noopener">任弼时与贺龙在湘鄂川黔根据地（人民网党史）</a></li>
+              <li><a href="http://cpc.people.com.cn/n1/2024/0502/c443712-40228103.html" target="_blank" rel="noopener">党和人民的“骆驼”（中国共产党新闻网，2024-05-02）</a></li>
+              <li><a href="http://cpc.people.com.cn/n1/2019/1227/c117005-31526205.html" target="_blank" rel="noopener">黔张常铁路正式开通运营（人民网，2019-12-27）</a></li>
+              <li><a href="http://www.china-railway.com.cn/gsjs/shzr/201909/t20190903_95905.html" target="_blank" rel="noopener">深山通铁路 脱贫有出路（国铁集团，桑植站距刘家坪车程）</a></li>
+              <li><a href="https://www.dswxyjy.org.cn/n1/2017/1121/c244523-29659205.html" target="_blank" rel="noopener">《七律·长征》的来龙去脉（中央党史和文献研究院）</a></li>
+              <li><a href="https://www.neac.gov.cn/seac/xwzx/202607/1192716.shtml" target="_blank" rel="noopener">中国工农红军第二方面军长征出发地纪念馆：薪由乡亲送，火耀长征途（中国民族报，国家民委网站转载，2026-07-20）</a></li>
+              <li><a href="http://cpc.people.com.cn/n1/2026/0604/c443712-40733648.html" target="_blank" rel="noopener">红星照耀少年身——两位小红军的革命征程（中国共产党新闻网，原载中国军网，2026-06-04）</a></li>
+              <li><a href="http://www.xinhuanet.com/politics/2016-08/18/c_129238259.htm" target="_blank" rel="noopener">绝命后卫师——红5军团第34师（新华网，2016-08-18）</a></li>
+            </ol>
+          </details>
+          <p class="map-disclaimer">地图为示意图，不作为国界与行政区划依据；底图数据来自阿里云 DataV</p>
         </article>
 
         <article class="about-card">
           <h3>参考项目</h3>
           <ul class="src-list">
-            <li><a href="https://github.com/mapbox/storytelling" target="_blank" rel="noopener">mapbox/storytelling</a> · 章节配置驱动的滚动地图故事</li>
-            <li><a href="https://github.com/russellsamora/scrollama" target="_blank" rel="noopener">russellsamora/scrollama</a> · 滚动叙事触发库</li>
-            <li>新华网《征程》红军长征全景交互地图 · 长征路线的交互地图化表达</li>
-            <li>光明网 × 腾讯《烽火长征路》H5 · 长征胜利90周年主题叙事节奏</li>
-            <li><a href="https://github.com/youxuels/long-march-map" target="_blank" rel="noopener">youxuels/long-march-map</a> · 长征路线数据与可视化思路</li>
-            <li>长沙《数字里的长征》· 电报交互（小红电报单的灵感来源）</li>
+            <li><a href="https://github.com/mapbox/storytelling" target="_blank" rel="noopener">mapbox/storytelling</a> · 章节配置驱动的滚动地图故事（BSD-3-Clause）</li>
+            <li><a href="https://github.com/russellsamora/scrollama" target="_blank" rel="noopener">russellsamora/scrollama</a> · 基于 IntersectionObserver 的滚动叙事库（MIT）</li>
+            <li><a href="https://fms.news.cn/swf/2016_sjxw/czqjdt/qjkcz/index.html" target="_blank" rel="noopener">新华网《征程——红军长征全景交互地图》</a> · 2016，长征路线的交互地图化表达</li>
+            <li><a href="https://topics.gmw.cn/2026-10/12/content_39040749.htm" target="_blank" rel="noopener">光明网 × 腾讯新闻《烽火长征路》互动H5</a> · 2026，“开路先锋/铁流后卫”双线叙事</li>
+            <li><a href="https://github.com/youxuels/long-march-map" target="_blank" rel="noopener">youxuels/long-march-map</a> · 红军长征交互式路线图（Leaflet）</li>
+            <li><a href="https://www.icswb.com/h/158/20260901/993639.html" target="_blank" rel="noopener">中国共产党长沙历史馆《雄关漫道——数字里的长征》主题展</a> · 2026，模拟电报互动（小红电报单的灵感来源）</li>
           </ul>
         </article>
       </div>
@@ -266,9 +354,18 @@
   </main>
 
   <footer class="footer">
-    <p class="footer-title">《薪火·湘征》</p>
-    <p>码承长征薪火，页绘青春征途 · 湖南工学院网页设计大赛参赛作品</p>
-    <p class="footer-small">史料内容整理中，最终版将逐条标注权威出处 · 地图数据：DataV.GeoAtlas</p>
+    <div class="footer-inner">
+      <div class="footer-text">
+        <p class="footer-title">《薪火·湘征》</p>
+        <p>码承长征薪火，页绘青春征途 · 湖南工学院网页设计大赛参赛作品</p>
+        <p class="footer-small">史料来源见“关于我们”与各节点详情页 · 地图为示意图，不作为国界与行政区划依据；底图数据来自阿里云 DataV</p>
+      </div>
+      <!-- v1.1：页脚二维码（与接力区同一个，扫码打开 #relay） -->
+      <a class="footer-qr" href="#relay" aria-label="扫码在手机上打开 / 接力">
+        <span class="qr-box" data-qr></span>
+        <span>扫码在手机上打开 / 接力</span>
+      </a>
+    </div>
   </footer>
 
   <!--
@@ -280,6 +377,7 @@
   <script src="vendor/ScrollTrigger.min.js"></script>
   <script src="vendor/echarts.min.js"></script>
   <script src="vendor/scrollama.min.js"></script>
+  <script src="vendor/qrcode-generator.js"></script>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

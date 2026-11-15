@@ -7,12 +7,29 @@
  *   页头 → 历史经过 + 时间轴 → 小地图 + 人物小卡 → 金句 → 今天的它 → 上一站/下一站
  *
  * 所有路径都是相对路径（../），部署在 GitHub Pages 子路径 /xinhuo-xiangzheng/ 下同样可用。
- * ⚠️ 内容为初稿，史料待核（见 nodes.js 顶部说明）。
+ *
+ * v1.1 新增：
+ *   · 图片插槽：节点配置里有 photo 字段时，页头下方显示一张主图（<figure>），没有就什么都不显示：
+ *       photo: {
+ *         src: 'rucheng.jpg',        // 图片文件名，放在 assets/ 目录（也可写 http(s) 完整地址）
+ *         caption: '图片说明',
+ *         credit: '摄影 / 提供者',
+ *         license: '授权方式，如 CC BY-SA 4.0 / 已获授权',
+ *         sourceUrl: 'https://…',     // 出处链接（可选）
+ *       }
+ *     图片加载失败时整个 figure 自动隐藏，不会出现“裂图”。
+ *   · 首字下沉只用于汉字开头的段落；数字（年份）开头的段落改为金色“年份眉标”。
+ *   · 小地图常驻站点名标注 + “你在湖南这里”说明。
+ *   · 翻页条：只保留一个“回到湘征地图”；第一站/最后一站缺少的上一站/下一站显示为置灰。
+ *
+ * v1.2 新增：
+ *   · 史料出处：按 nodes.js 中 details.*.refs 给每一栏加上角标 [1][2]…，页底列出“史料出处”（标题 + 链接，取自 SOURCES）。
+ *   · 图片署名：图注下方显示 作者 · 许可证（链接）· 原图链接，满足 CC BY / BY-SA 的署名要求。
  */
 
-import { detailOrder } from './data/nodes.js';
+import { detailOrder, SOURCES } from './data/nodes.js';
 
-const C = { red: '#B3261E', paper: '#F4EDE1', paperDark: '#E9DCC4', ink: '#1F1A17', inkSoft: '#5A4E45' };
+const C = { red: '#B3261E', paper: '#F4EDE1', paperDark: '#E9DCC4', ink: '#1F1A17', inkSoft: '#5A4E45', gold: '#C9A45C' };
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** HTML 转义：内容来自配置文件，也照样转义，养成习惯 */
@@ -20,8 +37,31 @@ function esc(str = '') {
   return String(str).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
+/**
+ * 史料出处编号：按页面上出现的顺序（历史经过 → 时间轴 → 人物 → 金句 → 今天的它 → 交通）给来源编号，
+ * 同一来源只编一次号。mark(section) 返回该栏的上角标 HTML，list 为页底的出处列表。
+ */
+function buildRefs(refs = {}) {
+  const list = [];
+  const num = {};
+  const mark = (section) => {
+    const keys = (refs[section] || []).filter((k) => SOURCES[k]);
+    if (!keys.length) return '';
+    const links = keys.map((k) => {
+      if (!num[k]) { list.push(k); num[k] = list.length; }
+      return `<a href="#src-${num[k]}" aria-label="史料出处第 ${num[k]} 条">[${num[k]}]</a>`;
+    });
+    return `<sup class="fn">${links.join('')}</sup>`;
+  };
+  return { mark, list };
+}
+
 function render(node, idx) {
   const d = node.detail;
+  const ref = buildRefs(d.refs);
+  // 先按页面顺序生成角标（编号顺序 = 阅读顺序）
+  const fn = {};
+  for (const sec of ['history', 'timeline', 'people', 'golden', 'today', 'route']) fn[sec] = ref.mark(sec);
   const prev = detailOrder[idx - 1];
   const next = detailOrder[idx + 1];
 
@@ -40,12 +80,22 @@ function render(node, idx) {
     )
     .join('');
 
+  // 翻页：有上一站/下一站就是链接；第一站没有上一站、最后一站没有下一站 → 置灰占位（不可点击）
   const navLink = (n, dir) =>
     n
       ? `<a class="pager-link pager-${dir}" href="${esc(n.detail.page)}">
            <span>${dir === 'prev' ? '← 上一站' : '下一站 →'}</span><strong>${esc(n.title)}</strong></a>`
-      : `<a class="pager-link pager-${dir} is-map" href="../index.html#storymap">
-           <span>${dir === 'prev' ? '← 回到' : '回到 →'}</span><strong>湘征地图</strong></a>`;
+      : `<span class="pager-link pager-${dir} is-disabled" aria-disabled="true">
+           <span>${dir === 'prev' ? '← 上一站' : '下一站 →'}</span><strong>${dir === 'prev' ? '已是第一站' : '已是最后一站'}</strong></span>`;
+
+  // 首字下沉 / 年份眉标：段落以汉字开头才做首字下沉；以数字开头（如“1934年…”）改为在段首上方放一个金色年份眉标
+  const history = String(d.history || '');
+  const isHan = /^[\u4e00-\u9fff]/.test(history);
+  const yearMatch = history.match(/^(\d{4})\s*年/);
+  const eyebrow = !isHan && yearMatch ? `<p class="year-eyebrow" aria-hidden="true"><span>${esc(yearMatch[1])}</span></p>` : '';
+
+  // 图片插槽（photo 字段可选；没有就不输出任何东西）
+  const hero = photoFigure(node.photo || d.photo);
 
   document.getElementById('detail').innerHTML = `
     <nav class="crumbs" aria-label="面包屑">
@@ -60,28 +110,32 @@ function render(node, idx) {
       <p class="detail-place">${esc(node.place)}</p>
     </header>
 
+    ${hero}
+
     <div class="detail-grid">
       <section class="detail-main" aria-labelledby="h-history">
         <h2 id="h-history" class="col-title">历史经过</h2>
-        <p class="detail-history">${esc(d.history)}</p>
+        ${eyebrow}
+        <p class="detail-history${isHan ? ' has-dropcap' : ''}">${esc(history)}${fn.history}</p>
         ${node.note ? `<p class="step-note">${esc(node.note)}</p>` : ''}
-        <h2 class="col-title">时间轴</h2>
+        <h2 class="col-title">时间轴${fn.timeline}</h2>
         <ol class="timeline">${timeline}</ol>
       </section>
 
       <aside class="detail-side">
         <div class="mini-map-frame">
           <div id="miniMap" class="mini-map" role="img" aria-label="${esc(node.mapLabel)}位置示意图"></div>
+          <p class="mini-map-caption"><span class="dot" aria-hidden="true"></span>你在湖南这里：<b>${esc(node.mapLabel)}</b></p>
           <p class="map-note">位置示意 · 坐标为近似值</p>
         </div>
-        <h2 class="col-title">人物小卡</h2>
+        <h2 class="col-title">人物小卡${fn.people}</h2>
         ${people}
       </aside>
     </div>
 
     <figure class="golden">
       <blockquote>“${esc(d.golden.text)}”</blockquote>
-      <figcaption>—— ${esc(d.golden.source)}</figcaption>
+      <figcaption>—— ${esc(d.golden.source)}${fn.golden}</figcaption>
     </figure>
 
     <section class="today" aria-labelledby="h-today">
@@ -90,23 +144,69 @@ function render(node, idx) {
         <article class="today-card">
           <p class="today-label">纪念馆 / 旧址</p>
           <h3>${esc(d.today.name)}</h3>
-          <p>${esc(d.today.intro)}</p>
+          <p>${esc(d.today.intro)}${fn.today}</p>
         </article>
         <article class="today-card today-route">
           <p class="today-label">从衡阳出发怎么去</p>
           <h3>衡阳 → ${esc(node.mapLabel)}</h3>
-          <p>${esc(d.today.route)}</p>
+          <p>${esc(d.today.route)}${fn.route}</p>
         </article>
       </div>
     </section>
 
-    <p class="detail-disclaimer">本页史料为初稿，标注“待核”的内容正在对照权威出处核实；交通信息仅供参考，请以 12306 和导航为准。</p>
+    ${sourcesSection(ref.list)}
+
+    <p class="detail-disclaimer">交通信息仅供参考，请以 12306 和导航为准。地图为示意图，不作为国界与行政区划依据；底图数据来自阿里云 DataV。</p>
 
     <nav class="pager" aria-label="上一站 / 下一站">
       ${navLink(prev, 'prev')}
       <a class="pager-back" href="../index.html#step-${esc(node.id)}">◉ 回到湘征地图</a>
       ${navLink(next, 'next')}
     </nav>`;
+
+  // 图片加载失败 → 隐藏整个 figure（不留裂图）
+  const img = document.querySelector('.detail-photo img');
+  if (img) img.addEventListener('error', () => img.closest('figure').remove());
+}
+
+/**
+ * 详情页主图插槽：photo = { src, caption, credit, license, sourceUrl }
+ * src 只写文件名时，从站点的 assets/ 目录读取（详情页在 pages/ 下，所以是 ../assets/）。
+ */
+function photoFigure(photo) {
+  if (!photo || !photo.src) return '';
+  const src = /^(https?:)?\/\//.test(photo.src) || photo.src.startsWith('../') ? photo.src : `../assets/${photo.src}`;
+  const isUrl = (u) => typeof u === 'string' && /^https?:\/\//.test(u);
+  // 署名行：作者 · 许可证（链接到许可证文本）· 原图链接
+  const parts = [];
+  if (photo.credit) parts.push(`图片：${esc(photo.credit)}`);
+  if (photo.license) {
+    parts.push(isUrl(photo.licenseUrl)
+      ? `许可：<a href="${esc(photo.licenseUrl)}" target="_blank" rel="noopener license">${esc(photo.license)}</a>`
+      : `许可：${esc(photo.license)}`);
+  }
+  if (isUrl(photo.sourceUrl)) parts.push(`<a href="${esc(photo.sourceUrl)}" target="_blank" rel="noopener">查看原图</a>`);
+  const credit = parts.join(' · ');
+  return `<!-- ▼ 图片插槽：内容来自 nodes.js 的 photo 字段 -->
+    <figure class="detail-photo">
+      <img src="${esc(src)}" alt="${esc(photo.caption || '')}" loading="lazy" decoding="async" />
+      ${photo.caption || credit ? `<figcaption><span class="photo-caption">${esc(photo.caption || '')}</span>${credit ? `<span class="photo-credit">${credit}</span>` : ''}</figcaption>` : ''}
+    </figure>`;
+}
+
+/** 页底“史料出处”列表：编号与正文上角标一致 */
+function sourcesSection(keys) {
+  if (!keys.length) return '';
+  const items = keys
+    .map((k, i) => {
+      const s = SOURCES[k];
+      return `<li id="src-${i + 1}"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a></li>`;
+    })
+    .join('');
+  return `<section class="detail-sources" aria-labelledby="h-sources">
+      <h2 id="h-sources" class="col-title">史料出处</h2>
+      <ol class="src-notes">${items}</ol>
+    </section>`;
 }
 
 /** 小地图：湖南底图 + 本节点的水波纹点（ECharts，本地数据） */
@@ -128,7 +228,7 @@ async function miniMap(node) {
         roam: false,
         silent: true,
         center: [111.3, 27.4],
-        zoom: 2.35,
+        zoom: 2.7,
         aspectScale: 0.85,
         itemStyle: { areaColor: C.paperDark, borderColor: C.ink, borderWidth: 0.5 },
         regions: neighbors.features.map((f) => ({
@@ -145,9 +245,26 @@ async function miniMap(node) {
           type: reducedMotion ? 'scatter' : 'effectScatter',
           coordinateSystem: 'geo',
           symbolSize: 14,
-          rippleEffect: { brushType: 'stroke', scale: 4 },
+          rippleEffect: { brushType: 'stroke', scale: 3.2 },
           itemStyle: { color: C.red },
-          label: { show: true, formatter: node.mapLabel, position: 'right', fontWeight: 'bold', fontSize: 14, color: C.ink, backgroundColor: 'rgba(244,237,225,.85)', padding: [2, 5] },
+          // v1.1：站点名常驻显示、字号加大；做成纸色底偏移小签，离水波纹远一点，不压住红点
+          label: {
+            show: true,
+            formatter: node.mapLabel,
+            position: node.coord[0] > 112 ? 'left' : 'right',
+            distance: 16,
+            fontFamily: 'serif',
+            fontWeight: 'bold',
+            fontSize: 16,
+            lineHeight: 20,
+            color: C.ink,
+            backgroundColor: 'rgba(244,237,225,.95)',
+            borderColor: C.gold,
+            borderWidth: 1,
+            borderRadius: 2,
+            padding: [3, 7],
+          },
+          emphasis: { disabled: true },
           data: [{ value: node.coord }],
         },
         {
