@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- 节点详情页模板：四个详情页内容完全相同，只有 <title> 和 body 的 data-node 不同 -->
+  <title>血战湘江 —— 薪火·湘征</title>
+  <meta name="theme-color" content="#F4EDE1" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23B3261E'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='%23F4EDE1' font-family='serif' font-weight='bold'%3E%E6%B9%98%3C/text%3E%3C/svg%3E" />
+  <!-- 相对路径：本地 start.bat 与 GitHub Pages 子路径 /xinhuo-xiangzheng/ 下都能用 -->
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body class="detail-page" data-node="xiangjiang">
+  <div class="paper-grain" aria-hidden="true"></div>
+
+  <header class="topbar is-scrolled">
+    <a class="brand" href="../index.html" aria-label="回到首页">
+      <span class="seal" aria-hidden="true">湘</span>
+      <span class="brand-text">薪火·湘征</span>
+    </a>
+    <nav class="nav" aria-label="主导航">
+      <a href="../index.html#storymap" class="is-active">湘征地图</a>
+      <a href="../index.html#qa">薪火问答</a>
+      <a href="../index.html#relay">青春接力</a>
+      <a href="../index.html#about">关于我们</a>
+    </nav>
+  </header>
+
+  <!-- 内容由 js/detail.js 根据 js/data/nodes.js 渲染 -->
+  <main id="detail" class="detail">
+    <noscript>本页需要启用 JavaScript，并通过本地服务器打开（见 README）。</noscript>
+  </main>
+
+  <footer class="footer">
+    <p class="footer-title">《薪火·湘征》</p>
+    <p>码承长征薪火，页绘青春征途 · 湖南工学院网页设计大赛参赛作品</p>
+    <p class="footer-small">史料内容整理中，最终版将逐条标注权威出处 · 地图数据：DataV.GeoAtlas</p>
+  </footer>
+
+  <script src="../vendor/echarts.min.js"></script>
+  <script type="module" src="../js/detail.js"></script>
+</body>
+</html>

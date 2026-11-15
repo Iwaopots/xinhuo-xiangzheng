@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>薪火·湘征 —— 长征湖南段交互数字展</title>
+  <meta name="description" content="码承长征薪火，页绘青春征途。纪念中国工农红军长征胜利90周年，长征湖南段交互数字展。" />
+  <meta name="theme-color" content="#F4EDE1" />
+  <!-- 内联 SVG 图标（红色印章“湘”），无需额外文件，也避免 favicon 404 -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23B3261E'/%3E%3Ctext x='32' y='45' font-size='38' text-anchor='middle' fill='%23F4EDE1' font-family='serif' font-weight='bold'%3E%E6%B9%98%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 纸张噪点纹理：一层固定在视口上的半透明噪点（见 css/style.css 的 .paper-grain） -->
+  <div class="paper-grain" aria-hidden="true"></div>
+
+  <!-- ===================== 顶部导航（报头样式） ===================== -->
+  <header class="topbar" id="topbar">
+    <a class="brand" href="#hero" aria-label="回到首页">
+      <span class="seal" aria-hidden="true">湘</span>
+      <span class="brand-text">薪火·湘征</span>
+    </a>
+    <nav class="nav" aria-label="主导航">
+      <a href="#storymap">湘征地图</a>
+      <a href="#qa">薪火问答</a>
+      <a href="#relay">青春接力</a>
+      <a href="#about">关于我们</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===================== 1. 首页 Hero「启程」 ===================== -->
+    <!-- hero 比一屏更高，内部 .hero-stage 吸顶；滚动这段距离时红色行军线逐渐画出 -->
+    <section class="hero" id="hero" aria-labelledby="hero-title">
+      <div class="hero-stage">
+        <!-- 报纸刊头信息条 -->
+        <div class="masthead-line">
+          <span>一九三四 — 二〇二六</span>
+          <span class="dot" aria-hidden="true">◆</span>
+          <span>长征湖南段 · 交互数字展</span>
+          <span class="dot" aria-hidden="true">◆</span>
+          <span>湖南工学院 · 衡阳</span>
+        </div>
+
+        <!-- 行军线：标题下方一条自东（右）向西（左）蜿蜒的红线，随滚动“走”出来 -->
+        <svg class="march" viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <!-- 底下的浅色虚线：示意“尚未走过的路” -->
+          <path class="march-ghost"
+            d="M1160,50 C1080,50 1060,140 980,140 C900,140 880,72 800,75 C720,78 700,160 610,160 C520,160 510,80 430,80 C350,80 330,165 250,165 C170,165 120,122 40,130" />
+          <!-- 红色实线：由 hero.js 用 stroke-dashoffset 逐步画出 -->
+          <path class="march-line" id="marchPath"
+            d="M1160,50 C1080,50 1060,140 980,140 C900,140 880,72 800,75 C720,78 700,160 610,160 C520,160 510,80 430,80 C350,80 330,165 250,165 C170,165 120,122 40,130" />
+          <!-- 行军线头部的小红点 -->
+          <circle class="march-head" id="marchHead" r="7" cx="1160" cy="50" />
+          <!-- 沿途地名标签，由 hero.js 计算位置并在线条到达时淡入 -->
+          <g id="marchLabels"></g>
+        </svg>
+
+        <div class="hero-copy">
+          <p class="hero-kicker">纪念中国工农红军长征胜利90周年</p>
+          <h1 class="hero-title" id="hero-title">
+            <span class="bracket" aria-hidden="true">《</span>薪火<span class="mid-dot">·</span>湘征<span class="bracket" aria-hidden="true">》</span>
+          </h1>
+          <p class="hero-sub">码承长征薪火，页绘青春征途</p>
+        </div>
+
+        <a class="scroll-hint" href="#storymap" aria-label="向下滚动，进入湘征地图">
+          <span>向下滚动 · 启程</span>
+          <i aria-hidden="true"></i>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===================== 2. 湘征地图（滚动叙事） ===================== -->
+    <section class="storymap" id="storymap" aria-labelledby="storymap-title">
+      <header class="section-head">
+        <p class="section-no">第一版 · 湘征地图</p>
+        <h2 id="storymap-title">一条路，走过三湘</h2>
+        <p class="section-lead">向下滚动，跟随红军的足迹，走过长征在湖南的关键节点。</p>
+      </header>
+
+      <div class="storymap-body">
+        <!-- 左侧（手机上为顶部）吸附的地图 -->
+        <div class="map-sticky">
+          <div class="map-frame">
+            <div id="map" class="map" role="img" aria-label="湖南长征路线地图"></div>
+            <div class="map-caption" id="mapCaption" aria-live="polite">湖南省</div>
+            <p class="map-note">地图仅为示意 · 地点坐标为近似值</p>
+            <!-- v1：自动播放（现场演示用），逻辑见 js/autoplay.js -->
+            <div class="autoplay">
+              <button type="button" class="autoplay-btn" id="autoplayBtn" aria-pressed="false">▶ 自动播放</button>
+              <span class="autoplay-hint" id="autoplayHint" hidden>空格 暂停/继续 · ←/→ 切换</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧（手机上为下方）滚动的故事卡片，由 storymap.js 根据 nodes.js 生成 -->
+        <div class="steps" id="steps"></div>
+      </div>
+    </section>
+
+    <!-- ===================== 3. 薪火问答：AI 讲解员「小红」（js/qa.js） ===================== -->
+    <section class="qa" id="qa" aria-labelledby="qa-title">
+      <header class="section-head">
+        <p class="section-no">第二版 · 薪火问答</p>
+        <h2 id="qa-title">给小红发一封电报</h2>
+        <p class="section-lead">关于长征湖南段的任何问题，都可以“发报”问AI讲解员小红。</p>
+      </header>
+
+      <div class="qa-body">
+        <aside class="qa-intro">
+          <div class="xiaohong">
+            <div class="xiaohong-seal" aria-hidden="true">红</div>
+            <div>
+              <p class="xiaohong-name">AI 讲解员 · 小红</p>
+              <p class="qa-mode" id="qaMode">本地知识库模式 · 离线可用</p>
+            </div>
+          </div>
+          <p class="qa-desc">小红熟悉汝城沙洲、湘江战役、通道转兵、桑植出发和长征精神。默认从本地知识库检索作答，无需联网。</p>
+          <p class="qa-label">试试这样问：</p>
+          <div class="chips" id="qaChips"></div>
+          <button type="button" class="qa-settings-btn" id="qaSettingsBtn">⚙ 大模型设置（可选）</button>
+        </aside>
+
+        <!-- 电报单样式的对话区 -->
+        <div class="telegraph">
+          <div class="tg-head">
+            <span class="tg-title">薪火电报局 · 收发报单</span>
+            <span class="tg-sub">XINHUO TELEGRAPH · 1934—2026</span>
+          </div>
+          <div class="tg-log" id="qaLog" aria-live="polite" aria-label="问答记录"></div>
+          <form class="tg-form" id="qaForm" autocomplete="off">
+            <label for="qaInput" class="tg-label">去电内容</label>
+            <input id="qaInput" name="q" type="text" maxlength="60" placeholder="例如：通道转兵为什么重要？" />
+            <button type="submit" class="tg-send" id="qaSend">发 报</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 大模型设置：密钥只保存在本机 localStorage -->
+      <dialog class="qa-dialog" id="qaSettings" aria-labelledby="llmTitle">
+        <form id="llmForm" method="dialog">
+          <h3 id="llmTitle">大模型模式（可选）</h3>
+          <p class="dialog-note">填写任意兼容 OpenAI 接口的服务。小红会先在本地知识库检索最相关的 3 条资料，只让模型依据这些资料作答。<br />接口地址、密钥只保存在本浏览器的 localStorage，不会上传到本站；比赛现场建议使用默认的本地模式。</p>
+          <label class="switch"><input type="checkbox" id="llmEnabled" /> 启用大模型模式</label>
+          <label>接口地址（Base URL）<input id="llmBase" type="url" placeholder="https://api.example.com/v1" /></label>
+          <label>密钥（API Key）<input id="llmKey" type="password" placeholder="sk-..." autocomplete="off" /></label>
+          <label>模型名<input id="llmModel" type="text" placeholder="例如 deepseek-chat" /></label>
+          <p class="dialog-tip" id="llmTip" aria-live="polite"></p>
+          <div class="dialog-actions">
+            <button type="button" id="llmClear" class="btn-ghost">清除设置</button>
+            <button type="button" id="llmCancel" class="btn-ghost">取消</button>
+            <button type="submit" class="btn-red">保存</button>
+          </div>
+        </form>
+      </dialog>
+    </section>
+
+    <!-- ===================== 4. 青春接力（js/relay.js + js/relay-store.js） ===================== -->
+    <section class="relay" id="relay" aria-labelledby="relay-title">
+      <header class="section-head">
+        <p class="section-no">第三版 · 青春接力</p>
+        <h2 id="relay-title">接过薪火，写下你的新长征</h2>
+        <p class="section-lead">每一代人都有自己的长征路。留下你的目标，生成一张属于你的接力海报。</p>
+      </header>
+
+      <div class="relay-body">
+        <form class="relay-form" id="relayForm" novalidate>
+          <div class="field">
+            <label for="rName">昵称 <span class="count" data-count-for="name">0/12</span></label>
+            <input id="rName" name="name" type="text" maxlength="12" placeholder="例如：小湘" required />
+            <p class="field-error" data-error-for="name" aria-live="polite"></p>
+          </div>
+          <div class="field">
+            <label for="rMajor">专业 / 班级 <span class="count" data-count-for="major">0/20</span></label>
+            <input id="rMajor" name="major" type="text" maxlength="20" placeholder="例如：计算机科学与技术 2401" required />
+            <p class="field-error" data-error-for="major" aria-live="polite"></p>
+          </div>
+          <div class="field">
+            <label for="rGoal">我的“新长征”目标 <span class="count" data-count-for="goal">0/40</span></label>
+            <textarea id="rGoal" name="goal" rows="3" maxlength="40" placeholder="例如：把网页大赛作品做到决赛，用代码讲好家乡的红色故事" required></textarea>
+            <p class="field-error" data-error-for="goal" aria-live="polite"></p>
+          </div>
+          <div class="relay-actions">
+            <button type="submit" class="btn-red">接过薪火 · 生成海报</button>
+            <button type="button" class="btn-ghost" id="posterDownload" disabled>下载海报</button>
+          </div>
+          <p class="relay-status" id="relayStatus" aria-live="polite"></p>
+          <p class="relay-privacy">信息仅保存在你自己的浏览器中（localStorage），不会上传。</p>
+        </form>
+
+        <div class="poster-frame">
+          <canvas id="posterCanvas" width="1080" height="1440" aria-label="接力海报预览"></canvas>
+        </div>
+      </div>
+
+      <div class="wall-head">
+        <p class="wall-count">已有 <strong id="relayCount">0</strong> 位同学接力</p>
+        <button type="button" class="btn-link" id="relayClearSamples" hidden>清除示例数据</button>
+      </div>
+      <div class="relay-wall" id="relayWall" aria-live="polite"></div>
+    </section>
+
+    <!-- ===================== 5. 关于我们 ===================== -->
+    <section class="about" id="about" aria-labelledby="about-title">
+      <header class="section-head">
+        <p class="section-no">第四版 · 关于我们</p>
+        <h2 id="about-title">关于《薪火·湘征》</h2>
+      </header>
+
+      <div class="about-grid">
+        <article class="about-card about-team">
+          <h3>参赛队伍</h3>
+          <p class="team-name">队名：<strong>「待定」</strong></p>
+          <p>湖南工学院（衡阳）· 网页设计大赛参赛作品</p>
+          <p class="muted">成员与分工：待补充</p>
+        </article>
+
+        <article class="about-card about-idea">
+          <h3>设计理念</h3>
+          <p><strong>为什么是湖南段？</strong>长征的薪火在三湘大地上点燃过两次：1934年中央红军途经湘南、湘西南，留下“半条被子”的温情、湘江战役的悲壮、通道转兵的抉择；1935年红二、六军团又从桑植出发。我们就在湖南读书，这段历史离我们最近。</p>
+          <p><strong>为什么用滚动叙事？</strong>把“读一段历史”变成“走一段路”：每向下滚动一次，地图就跟着红军前进一站。在通道的岔路口，让观众亲手做一次选择，再看历史如何作答。</p>
+          <p><strong>为什么有问答和接力？</strong>小红让问题有人回应；青春接力把长征精神落到每个同学自己的目标上——从“看历史”到“接薪火”。</p>
+        </article>
+
+        <article class="about-card">
+          <h3>技术栈</h3>
+          <ul class="tech-list">
+            <li><b>HTML5 / CSS3 / 原生 JavaScript</b>（ES Module，无需打包）</li>
+            <li><b>GSAP + ScrollTrigger</b> · 滚动驱动的行军线动画</li>
+            <li><b>Apache ECharts 5</b> · 湖南地图、迁徙流光、涟漪点</li>
+            <li><b>scrollama</b> · 基于 IntersectionObserver 的滚动叙事触发</li>
+            <li><b>TF-IDF + 中文二元分词</b> · 小红的本地检索问答（可选接入大模型，RAG）</li>
+            <li><b>Canvas 2D</b> · 接力海报生成与导出</li>
+            <li><b>localStorage + 存储适配器</b> · 接力墙数据，预留云端接口</li>
+            <li><b>离线运行</b> · 全部第三方库与地图数据本地化，GitHub Pages 部署</li>
+          </ul>
+        </article>
+
+        <article class="about-card">
+          <h3>史料来源</h3>
+          <ul class="src-list">
+            <li>《中国共产党历史》第一卷（待登记具体章节）</li>
+            <li>中国共产党新闻网 · 长征专题（待登记链接）</li>
+            <li>汝城“半条被子的温暖”专题陈列馆资料（待登记）</li>
+            <li>通道转兵纪念馆资料（待登记）</li>
+            <li>红二方面军长征出发地纪念馆资料（待登记）</li>
+            <li>人民网 / 新华网相关报道（待登记）</li>
+          </ul>
+          <p class="muted">所有日期、人数、引文正在逐条核对，未核实处已标注“待核”。地图数据：阿里云 DataV.GeoAtlas，仅为示意。</p>
+        </article>
+
+        <article class="about-card">
+          <h3>参考项目</h3>
+          <ul class="src-list">
+            <li><a href="https://github.com/mapbox/storytelling" target="_blank" rel="noopener">mapbox/storytelling</a> · 章节配置驱动的滚动地图故事</li>
+            <li><a href="https://github.com/russellsamora/scrollama" target="_blank" rel="noopener">russellsamora/scrollama</a> · 滚动叙事触发库</li>
+            <li>新华网《征程》红军长征全景交互地图 · 长征路线的交互地图化表达</li>
+            <li>光明网 × 腾讯《烽火长征路》H5 · 长征胜利90周年主题叙事节奏</li>
+            <li><a href="https://github.com/youxuels/long-march-map" target="_blank" rel="noopener">youxuels/long-march-map</a> · 长征路线数据与可视化思路</li>
+            <li>长沙《数字里的长征》· 电报交互（小红电报单的灵感来源）</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p class="footer-title">《薪火·湘征》</p>
+    <p>码承长征薪火，页绘青春征途 · 湖南工学院网页设计大赛参赛作品</p>
+    <p class="footer-small">史料内容整理中，最终版将逐条标注权威出处 · 地图数据：DataV.GeoAtlas</p>
+  </footer>
+
+  <!--
+    第三方库（全部放在 vendor/，离线可用）：
+    以经典 <script> 方式加载，挂到全局 window.gsap / window.ScrollTrigger / window.echarts / window.scrollama，
+    我们自己的代码用 ES Module（type="module"），模块脚本默认延迟执行，此时库已加载完毕。
+  -->
+  <script src="vendor/gsap.min.js"></script>
+  <script src="vendor/ScrollTrigger.min.js"></script>
+  <script src="vendor/echarts.min.js"></script>
+  <script src="vendor/scrollama.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

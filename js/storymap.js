@@ -1,0 +1,437 @@
+/**
+ * storymap.js —— 湘征地图（滚动叙事 Scrollytelling）
+ * ------------------------------------------------------------
+ * 结构：左边一张“吸附”(position: sticky) 的 ECharts 地图，右边一列故事卡片。
+ * 用户滚动时，scrollama 告诉我们“现在哪张卡片走到了屏幕中间”，
+ * 我们就让地图飞到对应地点、点亮水波纹、画出从上一站过来的行军线。
+ *
+ * 数据流（答辩可讲）：
+ *   nodes.js（章节配置） ──生成──▶ 卡片 DOM
+ *                      └─驱动──▶ 地图状态（视角 + 已走过的路线 + 当前点）
+ *
+ * 用到的 ECharts 系列：
+ *   geo           底图（湖南 14 个市州 + 周边省份浅色衬底）
+ *   lines         行军线：已走过的为实线，刚走的一段带“流光”动画
+ *   scatter       所有节点的小圆点
+ *   effectScatter 当前节点的水波纹
+ */
+
+import { chapters, origin } from './data/nodes.js';
+
+const gsap = window.gsap;
+const echarts = window.echarts;
+const scrollama = window.scrollama;
+
+// ---- 颜色（与 css/style.css 的设计变量保持一致） ----
+const C = {
+  red: '#B3261E',
+  paper: '#F4EDE1',
+  paperDark: '#E9DCC4',
+  ink: '#1F1A17',
+  inkSoft: '#5A4E45',
+  gold: '#C9A45C',
+  neighborLine: '#BDB09C',
+};
+
+const MAP_NAME = 'xiang'; // 注册到 ECharts 的底图名称
+
+/* =============================================================
+ * 一、根据章节配置生成故事卡片
+ * ============================================================= */
+
+/** 简单的 HTML 转义，避免配置里的特殊字符破坏页面 */
+function esc(str = '') {
+  return String(str).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function renderSteps(container) {
+  container.innerHTML = chapters
+    .map((ch, i) => {
+      const note = ch.note ? `<p class="step-note">${esc(ch.note)}</p>` : '';
+
+      // 岔路口互动（只有配置了 choice 的章节才有）
+      const choice = ch.choice
+        ? `<div class="choice" role="group" aria-label="岔路口选择">
+             <p class="choice-prompt">${esc(ch.choice.prompt)}</p>
+             <div class="choice-buttons">
+               ${ch.choice.options
+                 .map((opt, k) => `<button type="button" class="choice-btn" data-k="${k}" aria-pressed="false">${esc(opt.label)}</button>`)
+                 .join('')}
+             </div>
+             <p class="choice-result" aria-live="polite"></p>
+           </div>`
+        : '';
+
+      const cta = ch.cta ? `<a class="cta" href="${esc(ch.cta.href)}">${esc(ch.cta.label)}</a>` : '';
+
+      // v1：有详情页的节点显示“查看详情 →”（相对路径，GitHub Pages 子路径下同样可用）
+      const more = ch.detail
+        ? `<a class="step-more" href="pages/${esc(ch.detail.page)}">查看详情 <span aria-hidden="true">→</span></a>`
+        : '';
+
+      return `<article class="step" id="step-${esc(ch.id)}" data-index="${i}" data-id="${esc(ch.id)}">
+          <p class="step-kicker">${esc(ch.kicker)}</p>
+          <p class="step-date">${esc(ch.date)}</p>
+          <h3>${esc(ch.title)}</h3>
+          <p class="step-place">${esc(ch.place)}</p>
+          <p class="step-story">${esc(ch.story)}</p>
+          ${note}
+          <blockquote class="step-quote">
+            <p>“${esc(ch.quote.text)}”</p>
+            <cite>—— ${esc(ch.quote.source)}</cite>
+          </blockquote>
+          ${choice}
+          ${more}
+          ${cta}
+        </article>`;
+    })
+    .join('');
+}
+
+/* =============================================================
+ * 二、路线数据：把章节配置变成“地图要画什么”
+ * ============================================================= */
+
+/** 参与行军线的节点（按顺序） */
+const routeNodes = chapters.filter((ch) => ch.inRoute);
+
+/**
+ * 计算第 index 章时，地图上应该显示的内容
+ * @returns {{ done: Array, active: Array, current: Array|null, visitedIds: Set }}
+ */
+function routeStateAt(index) {
+  const chapter = chapters[index];
+  const visitedIds = new Set();
+  const done = [];   // 已经走过的路段（静态实线）
+  const active = []; // 正在走的这一段（流光动画）
+
+  // 序章：只点亮出发地瑞金
+  if (chapter.id === 'prologue') {
+    return { done, active, current: origin.coord, visitedIds };
+  }
+
+  // 尾声：全部路线都算走过，路线整体流光
+  const lastRouteIdx = chapter.id === 'epilogue' ? routeNodes.length - 1 : routeNodes.indexOf(chapter);
+
+  let prev = origin.coord;
+  routeNodes.forEach((node, k) => {
+    if (k > lastRouteIdx) return;
+    visitedIds.add(node.id);
+    const isCurrent = k === lastRouteIdx && chapter.id !== 'epilogue';
+    const bucket = isCurrent ? active : done;
+    if (node.newBranch) {
+      // newBranch：另一支队伍的起点，不与上一站相连，改画它自己的示意路线
+      const path = node.branchPath || [];
+      for (let j = 1; j < path.length; j++) bucket.push({ coords: [path[j - 1], path[j]] });
+    } else {
+      bucket.push({ coords: [prev, node.coord] });
+    }
+    prev = node.coord;
+  });
+
+  if (chapter.id === 'epilogue') active.push(...done.splice(0)); // 尾声：全部路段都带流光
+
+  return { done, active, current: chapter.coord, visitedIds };
+}
+
+/* =============================================================
+ * 三、ECharts 地图
+ * ============================================================= */
+
+/**
+ * 把湖南（含 14 个市州）和周边省份合并成一张底图
+ * @param {object} hunanGeo     湖南市级 GeoJSON
+ * @param {object} neighborsGeo 周边省份 GeoJSON（江西、广西、贵州……）
+ */
+function registerBaseMap(hunanGeo, neighborsGeo) {
+  const merged = {
+    type: 'FeatureCollection',
+    features: [...neighborsGeo.features, ...hunanGeo.features],
+  };
+  echarts.registerMap(MAP_NAME, merged);
+
+  // 周边省份：浅色、虚一点，只作为“地理语境”
+  const neighborRegions = neighborsGeo.features.map((f) => ({
+    name: f.properties.name,
+    itemStyle: { areaColor: 'rgba(244,237,225,0.6)', borderColor: C.neighborLine, borderWidth: 0.8 },
+    label: { show: true, color: '#A59882', fontSize: 13, fontFamily: 'serif', fontWeight: 'bold' },
+  }));
+  return neighborRegions;
+}
+
+/** 生成地图的完整初始配置 */
+function baseOption(neighborRegions, reducedMotion) {
+  return {
+    animation: !reducedMotion,
+    geo: {
+      map: MAP_NAME,
+      roam: false,            // 禁止用户拖拽缩放，视角完全由滚动控制
+      silent: true,           // 底图不响应鼠标
+      center: chapters[0].view.center,
+      zoom: chapters[0].view.zoom,
+      aspectScale: 0.85,      // 纬度修正，让湖南的形状更接近真实比例
+      itemStyle: {
+        areaColor: C.paperDark,
+        borderColor: C.ink,
+        borderWidth: 0.6,
+      },
+      label: { show: true, color: C.inkSoft, fontSize: 11 },
+      regions: neighborRegions,
+    },
+    series: [
+      {
+        // 已走过的路段：静态红色实线
+        id: 'route-done',
+        type: 'lines',
+        coordinateSystem: 'geo',
+        zlevel: 1,
+        lineStyle: { color: C.red, width: 2.5, opacity: 0.85, curveness: 0.18 },
+        data: [],
+      },
+      {
+        // 刚刚走的一段：带“流光”箭头动画
+        id: 'route-active',
+        type: 'lines',
+        coordinateSystem: 'geo',
+        zlevel: 2,
+        effect: {
+          show: !reducedMotion,
+          period: 2.2,
+          // 拖尾必须为 0：ECharts 的拖尾依赖整层“运动模糊”，地图平移缩放时会留下大片残影
+          trailLength: 0,
+          symbol: 'arrow',
+          symbolSize: 9,
+          color: C.red,
+        },
+        lineStyle: { color: C.red, width: 3, opacity: 0.95, curveness: 0.18 },
+        data: [],
+      },
+      {
+        // 岔路口互动画出的方向线（通道转兵）
+        id: 'choice-line',
+        type: 'lines',
+        coordinateSystem: 'geo',
+        zlevel: 2,
+        effect: { show: !reducedMotion, period: 1.6, trailLength: 0, symbol: 'arrow', symbolSize: 10 },
+        lineStyle: { width: 2.5, type: 'dashed', curveness: 0.1 },
+        data: [],
+      },
+      {
+        // 所有节点小圆点
+        id: 'nodes',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        zlevel: 3,
+        symbolSize: 10,
+        label: {
+          show: true,
+          formatter: '{b}', // 显示地点名（默认会显示坐标数值）
+          position: 'right',
+          distance: 8,
+          fontFamily: 'serif',
+          fontWeight: 'bold',
+          fontSize: 14,
+          color: C.ink,
+          backgroundColor: 'rgba(244,237,225,0.85)',
+          padding: [2, 5],
+        },
+        data: [],
+      },
+      {
+        // 当前节点水波纹
+        id: 'current',
+        type: reducedMotion ? 'scatter' : 'effectScatter',
+        coordinateSystem: 'geo',
+        zlevel: 4,
+        symbolSize: 16,
+        rippleEffect: { brushType: 'stroke', scale: 4, period: 3 },
+        itemStyle: { color: C.red, shadowBlur: 10, shadowColor: 'rgba(179,38,30,.5)' },
+        data: [],
+      },
+      {
+        // 岔路口“错误方向”的标记
+        id: 'choice-mark',
+        type: 'scatter',
+        coordinateSystem: 'geo',
+        zlevel: 4,
+        symbol: 'circle',
+        symbolSize: 1,
+        label: {
+          show: true,
+          position: 'top',
+          distance: 10,
+          fontFamily: 'serif',
+          fontWeight: 'bold',
+          fontSize: 14,
+          color: C.paper,
+          backgroundColor: C.ink,
+          padding: [3, 6],
+        },
+        data: [],
+      },
+    ],
+  };
+}
+
+/** 所有节点的散点数据：走过的为红色，没走到的为空心 */
+function nodeData(visitedIds) {
+  const point = (name, coord, visited) => ({
+    name,
+    value: coord,
+    itemStyle: visited
+      ? { color: C.red, borderColor: C.paper, borderWidth: 2 }
+      : { color: C.paper, borderColor: C.inkSoft, borderWidth: 2 },
+    label: { color: visited ? C.ink : C.inkSoft },
+  });
+  return [
+    point(origin.name, origin.coord, true),
+    ...routeNodes.map((ch) => point(ch.mapLabel, ch.coord, visitedIds.has(ch.id))),
+  ];
+}
+
+/* =============================================================
+ * 四、对外入口
+ * ============================================================= */
+
+/**
+ * @param {{ hunanGeo: object, neighborsGeo: object, reducedMotion: boolean }} options
+ */
+export function initStorymap({ hunanGeo, neighborsGeo, reducedMotion }) {
+  const stepsEl = document.getElementById('steps');
+  const mapEl = document.getElementById('map');
+  const captionEl = document.getElementById('mapCaption');
+  renderSteps(stepsEl);
+
+  // ---- 1. 地图初始化 ----
+  const neighborRegions = registerBaseMap(hunanGeo, neighborsGeo);
+  const chart = echarts.init(mapEl, null, { renderer: 'canvas' });
+  chart.setOption(baseOption(neighborRegions, reducedMotion));
+
+  // 当前视角（GSAP 对这个普通对象做补间，每一帧同步给 ECharts，实现平滑“飞行”）
+  const view = { lng: chapters[0].view.center[0], lat: chapters[0].view.center[1], zoom: chapters[0].view.zoom };
+  let currentIndex = -1;
+
+  function applyView() {
+    chart.setOption({ geo: { center: [view.lng, view.lat], zoom: view.zoom } }, { lazyUpdate: true });
+  }
+
+  /** 让地图飞到某个视角 */
+  function flyTo({ center, zoom }) {
+    gsap.killTweensOf(view);
+    if (reducedMotion) {
+      Object.assign(view, { lng: center[0], lat: center[1], zoom });
+      applyView();
+      return;
+    }
+    gsap.to(view, {
+      lng: center[0],
+      lat: center[1],
+      zoom,
+      duration: 1.4,
+      ease: 'power2.inOut',
+      onUpdate: applyView,
+    });
+  }
+
+  /** 切换到第 index 章：更新卡片高亮、地图视角和路线 */
+  function activate(index) {
+    if (index === currentIndex) return;
+    currentIndex = index;
+    const chapter = chapters[index];
+
+    // 卡片高亮
+    stepsEl.querySelectorAll('.step').forEach((el, i) => el.classList.toggle('is-active', i === index));
+
+    // 地图标题
+    captionEl.textContent = chapter.coord ? chapter.mapLabel : chapter.kicker === '序章' ? '从瑞金到湖南' : '湖南 · 长征足迹';
+
+    // 地图路线
+    const state = routeStateAt(index);
+    chart.setOption({
+      series: [
+        { id: 'route-done', data: state.done },
+        { id: 'route-active', data: state.active },
+        { id: 'choice-line', data: [] },
+        { id: 'choice-mark', data: [] },
+        { id: 'nodes', data: nodeData(state.visitedIds) },
+        { id: 'current', data: state.current ? [{ value: state.current }] : [] },
+      ],
+    });
+
+    // 序章视角放宽一些，让江西瑞金也在画面里
+    flyTo(chapter.id === 'prologue' ? { center: [113.3, 26.9], zoom: 1.75 } : chapter.view);
+  }
+
+  // ---- 2. 岔路口互动（通道转兵） ----
+  const tongdao = chapters.find((ch) => ch.choice);
+  const choiceCard = tongdao && stepsEl.querySelector(`[data-id="${tongdao.id}"] .choice`);
+  if (choiceCard) {
+    const resultEl = choiceCard.querySelector('.choice-result');
+    // 两个方向在地图上的示意终点（近似坐标）
+    const targets = {
+      false: { coord: [109.95, 28.0], label: '✕ 重兵布防' }, // 北上湘西
+      true: { coord: [109.13, 26.23], label: '黎平（贵州）' }, // 西进贵州
+    };
+
+    choiceCard.querySelectorAll('.choice-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const opt = tongdao.choice.options[Number(btn.dataset.k)];
+        const cls = opt.correct ? 'is-right' : 'is-wrong';
+
+        choiceCard.querySelectorAll('.choice-btn').forEach((b) => {
+          b.setAttribute('aria-pressed', String(b === btn));
+          b.classList.remove('is-right', 'is-wrong');
+        });
+        btn.classList.add(cls);
+        resultEl.className = `choice-result ${cls}`;
+        resultEl.textContent = opt.result;
+
+        // 地图上画出所选方向
+        const target = targets[opt.correct];
+        const color = opt.correct ? C.red : C.ink;
+        chart.setOption({
+          series: [
+            {
+              id: 'choice-line',
+              data: [{ coords: [tongdao.coord, target.coord], lineStyle: { color }, effect: { color } }],
+            },
+            {
+              id: 'choice-mark',
+              data: [{ value: target.coord, label: { formatter: target.label, backgroundColor: color } }],
+            },
+          ],
+        });
+      });
+    });
+  }
+
+  // ---- 3. scrollama：监听哪张卡片进入了屏幕的触发线 ----
+  const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
+  const scroller = scrollama();
+  scroller
+    .setup({
+      step: '#steps .step',
+      offset: isMobile() ? 0.8 : 0.55, // 触发线位置：屏幕高度的 55%（手机端地图在上方，触发线放低）
+    })
+    .onStepEnter(({ index }) => activate(index));
+
+  activate(0);
+
+  // ---- 4. 窗口尺寸变化时，同步更新 ----
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      chart.resize();
+      scroller.resize();
+    }, 150);
+  });
+
+  // 返回给 main.js / autoplay.js 使用：当前第几章、卡片元素列表
+  return {
+    chart,
+    activate,
+    getIndex: () => currentIndex,
+    stepEls: [...stepsEl.querySelectorAll('.step')],
+  };
+}
